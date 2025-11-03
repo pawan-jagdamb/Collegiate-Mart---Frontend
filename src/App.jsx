@@ -30,7 +30,7 @@ export default function App() {
   // console.log("authUser",currentUser._id)
   useEffect(()=>{
     if(currentUser){
-      const socket= io('http://localhost:5000/',{
+      const socket= io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000/',{
         query:{
          userId: currentUser._id}
       });
