@@ -10,7 +10,14 @@ export default defineConfig({
   server: {
   proxy: {
     '/api': {
-      target: 'http://localhost:5000',  // Replace with your backend server
+      target: process.env.VITE_PROXY_TARGET || 'http://localhost:5000',  // configurable backend for dev
+      changeOrigin: true,
+      secure: false,
+    },
+    // Optional: proxy Socket.IO in dev if you prefer connecting via the dev server
+    '/socket.io': {
+      target: process.env.VITE_PROXY_TARGET || 'http://localhost:5000',
+      ws: true,
       changeOrigin: true,
       secure: false,
     },
