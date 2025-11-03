@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { createListing } from "../../../server/api/controllers/listingController";
 import {
   getDownloadURL,
   getStorage,
@@ -13,16 +12,12 @@ import { endpoints } from "../services/apis";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
-
 const { CREATE_LISTING } = endpoints;
 
-
-export default function CreateListing(props) {
-  const navigate= useNavigate();
-  const {currentUser}= useSelector(state=>state.user)
+export default function CreateListing() {
+  const navigate = useNavigate();
+  const { currentUser } = useSelector((state) => state.user);
   const [files, setFiles] = useState([]);
-
-  console.log("Current user",currentUser);
   const [formData, setFormData] = useState({
     imageUrls: [],
     name: "",
@@ -31,240 +26,265 @@ export default function CreateListing(props) {
     regularPrice: 0,
     discountPrice: 0,
     offer: false,
-    furnished: false,
+  
   });
   const [imageUploadError, setImageUploadError] = useState(false);
   const [uploadingProgress, setUploadingProgress] = useState(false);
-
   const [err, setError] = useState(false);
   const [loading, setLoading] = useState(false);
-  // console.log("files",files);
 
-  console.log("Form Data", formData);
-  function isFileTypeSupported(type) {
+  const isFileTypeSupported = (type) => {
     const supportedType = ["jpeg", "jpg", "png"];
-
     return supportedType.includes(type);
-  }
+  };
 
   const handleImageUpload = (e) => {
-    // e.preventDefault();
-    if (files.length > 0 && files.length + formData.imageUrls.length < 7) {
+    if (files.length > 0 && files.length + formData.imageUrls.length <= 6) {
       setUploadingProgress(true);
       setImageUploadError(false);
-      // const toastId=toast.loading("Uploading")
-      const promises = []; // we need to wait for all of them to upload
+      const toastId = toast.loading("Uploading...");
+      const promises = [];
 
       for (let i = 0; i < files.length; i++) {
-        const fileType = files[i].name.split(".")[1].toLowerCase();
-        console.log("each file is", files[i]);
+        const fileType = files[i].name.split(".").pop().toLowerCase();
         if (isFileTypeSupported(fileType)) {
-          // console.log(reached);
-          // if(files[i].size >2*1024){}
-          if (files[i].size / 1000 > 2 * 1024) {
+          if (files[i].size / 1024 > 2048) {
             setUploadingProgress(false);
-            // toast.dismiss(toastId)
-            setImageUploadError("Image  size should be less than 2mb max(2mb)");
-            toast.error("Image  size should be less than 2mb");
+            toast.dismiss(toastId);
+            setImageUploadError("Image size should be less than 2MB");
+            toast.error("Image size should be less than 2MB");
             return;
           }
           promises.push(storeImage(files[i]));
         } else {
           setUploadingProgress(false);
-          setImageUploadError("File Type Not Supported");
           toast.dismiss(toastId);
-          toast.error("Invalid file name or File Type Not Supported");
+          setImageUploadError("File Type Not Supported");
+          toast.error("Invalid file name or file type not supported");
           return;
         }
-        // toast.dismiss(toastId)
       }
+
       Promise.all(promises)
         .then((urls) => {
-          setFormData({
-            ...formData,
-            imageUrls: formData.imageUrls.concat(urls),
-          });
-          setImageUploadError(false);
+          setFormData((prev) => ({
+            ...prev,
+            imageUrls: prev.imageUrls.concat(urls),
+          }));
           setUploadingProgress(false);
+          toast.dismiss(toastId);
+          toast.success("Images uploaded successfully");
         })
-        .catch((error) => {
-          setImageUploadError("Image  size should be max(2mb)");
-          toast.error("Image  size should be max(2mb)");
-          // setUploadingProgress(false);
+        .catch(() => {
+          setUploadingProgress(false);
+          toast.dismiss(toastId);
+          toast.error("Error uploading images");
         });
-    } else if (files.length == 0) {
-      setImageUploadError("Choose atleast 1 image");
-      toast.error("Choose atleast 1 image");
-      setUploadingProgress(false);
+    } else if (files.length === 0) {
+      setImageUploadError("Choose at least 1 image");
+      toast.error("Choose at least 1 image");
     } else {
-      setImageUploadError("You can only upload 6 images");
+      setImageUploadError("You can only upload 6 images max");
       toast.error("You can only upload 6 images");
-      setUploadingProgress(false);
     }
   };
 
   const storeImage = async (file) => {
     return new Promise((resolve, reject) => {
       const storage = getStorage(app);
-      const fileName = new Date().getTime() + file.name;
-      const storageRef = ref(storage, `ListningImage/${fileName}`);
-
+      const fileName = `${new Date().getTime()}-${file.name}`;
+      const storageRef = ref(storage, `ListingImages/${fileName}`);
       const uploadTask = uploadBytesResumable(storageRef, file);
+
       uploadTask.on(
         "state_changed",
-        (snapshot) => {
-          const progress =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log("upload task is", progress);
-        },
-        (error) => {
-          reject(error);
-        },
-        () => {
-          getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
-            resolve(downloadURL);
-          });
-        }
+        null,
+        (error) => reject(error),
+        () =>
+          getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) =>
+            resolve(downloadURL)
+          )
       );
     });
   };
 
   const handleRemoveImage = (index) => {
-    setFormData({
-      ...formData,
-      imageUrls: formData.imageUrls.filter((_, i) => i !== index),
-    });
+    setFormData((prev) => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((_, i) => i !== index),
+    }));
   };
 
   const handleFormChange = (e) => {
-    if (e.target.id == "furnished" || e.target.id == "offer") {
-      setFormData({
-        ...formData,
-        [e.target.id]: e.target.checked,
-      });
-    }
-    if (
-      e.target.type === "number" ||
-      e.target.type == "text" ||
-      e.target.type == "textarea"
-    ) {
-      setFormData({
-        ...formData,
-        [e.target.id]: e.target.value,
-      });
-    }
+    const { id, type, value, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [id]: type === "checkbox" ? checked : value,
+    }));
+    console.log("formData")
   };
+
+
+
+
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("first")
-    const toastId= toast.loading("Creating Listing")
-    console.log("sedond")
+    const toastId = toast.loading("Creating Listing...");
 
+    // Validation
+    if (!formData.name || !formData.description || !formData.address ) {
+      toast.dismiss(toastId);
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (formData.imageUrls.length < 1) {
+      toast.dismiss(toastId);
+      toast.error("Upload at least one image");
+      return;
+    }
+
+    if (formData.offer && +formData.discountPrice >= +formData.regularPrice) {
+      toast.dismiss(toastId);
+      toast.error("Discount price should be less than regular price");
+      return;
+    }
+
+    setLoading(true);
     try {
-      if(formData.imageUrls.length<1){
-        toast.error("Image not Uploaded");
-        return
-      }
-      if(formData.offer && formData.discountPrice>formData.regularPrice){
-        toast.error("Discount price should be less then regular price");
+      const newFormData = {
+        ...formData,
+        userRef: currentUser._id,
+      };
+      console.log("1")
+
+      const response = await apiConnector("POST", CREATE_LISTING, newFormData, {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${currentUser.token}`,
+      });
+      console.log("2")
+
+      toast.dismiss(toastId);
+      console.log("response",response)
+
+      if (!response.data.success) {
+        setError(response.data.message);
         return;
       }
-console.log("threee")
-      setLoading(true);
-      setError(false);
-      const newFormData={
-        ...formData,userRef:`${currentUser._id}`  
-      }
-      console.log("New form Data",newFormData)
-     
-      const response = await apiConnector(
-        "POST",
-        CREATE_LISTING,
-        newFormData,   {
-          "Content-Type": "application/json",
-          Authorization:`Bearer ${currentUser.token}`
-         
-        }
-     
-      );
-      toast.dismiss(toastId);
-      console.log("four")
-      console.log(" response after submint listing data",response.data)
 
-      // const data= await response.json();
-      // console.log("Data  after submmit in creating listing",data);
-      setLoading(false);
-      if(!response.data.success){
-        setError(response.data.message)
-        return
-      }
-      const data= response.data;
-      console.log("Data in create listing ",data);
-      navigate(`/listing/${data.listing._id}`)
+      toast.success("Listing created successfully!");
+      setFormData({
+        imageUrls: [],
+        name: "",
+        description: "",
+        address: "",
+        regularPrice: 0,
+        discountPrice: 0,
+        offer: false,
+       
+       
+        
+      });
+      navigate(`/listing/${response.data.listing._id}`);
     } catch (error) {
       toast.dismiss(toastId);
+      toast.error("Something went wrong");
       setError(error.message);
-      toast.error(error);
+    } finally {
       setLoading(false);
-      console.log("Error in submitting data", error);
     }
   };
 
   return (
-    <main className="p-3 max-w-4xl mx-auto">
-      <h1 className="text-3xl font-semibold text-center my-7 text-white">
-        Create Listing
+    <main className="p-6 md:p-10 max-w-6xl mx-auto bg-gradient-to-r from-blue-700 to-blue-800 rounded-1xl">
+      <h1 className="text-5xl font-bold text-center text-white mb-12">
+        Create New Listing
       </h1>
 
       <form
         onSubmit={handleSubmit}
-        action=""
-        className="flex flex-col sm:flex-row gap-4"
+        className="flex flex-col md:flex-row gap-8 bg-white shadow-lg p-10 rounded-1xl"
       >
-        <div className="flex flex-col gap-4  flex-1">
+        {/* Left Side (Form Inputs) */}
+        <div className="flex flex-col gap-6 flex-1 text-black bg-gray-50 p-6 rounded-lg">
           <input
             type="text"
             placeholder="Name"
-            className=" border p-3 rounded-lg "
             id="name"
-            maxLength="62"
-            minLength="10"
             value={formData.name}
             onChange={handleFormChange}
+            className="border p-4 rounded-lg bg-white   border-black border-solid focus:outline-none focus:ring-2 focus:ring-blue-600"
             required
           />
           <textarea
-            type="text"
             placeholder="Description"
-            className=" border p-3 rounded-lg "
             id="description"
             value={formData.description}
             onChange={handleFormChange}
+            className="border p-4 rounded-lg bg-white text-black border-black border-solid focus:outline-none focus:ring-2 focus:ring-blue-600"
             required
           />
           <input
             type="text"
             placeholder="Address"
-            className=" border p-3 rounded-lg "
             id="address"
             value={formData.address}
             onChange={handleFormChange}
+            className="border p-4 rounded-lg bg-white text-black border-black border-solid focus:outline-none focus:ring-2 focus:ring-blue-600"
             required
           />
 
-          <div className="flex gap-6 flex-wrap text-white">
-            <div className="flex gap-2">
+          {/* Category */}
+          
+
+          {/* Availability */}
+          {/* <div className="flex items-center gap-3">
+            <label htmlFor="availability" className="font-semibold text-gray-700">
+              Availability
+            </label>
+            <select
+              id="availability"
+              value={formData.availability}
+              onChange={handleFormChange}
+              className="border p-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+            >
+              <option value="In Stock">In Stock</option>
+              <option value="Out of Stock">Out of Stock</option>
+            </select>
+          </div> */}
+
+          {/* Payment Methods */}
+          {/* <div className="flex flex-col gap-3">
+            <label className="font-semibold text-gray-700">Payment Methods</label>
+            <div className="flex gap-3">
               <input
                 type="checkbox"
-                id="furnished"
-                className="w-5"
-                onChange={handleFormChange}
-                checked={formData.furnished}
+                value="Credit Card"
+                // checked={formData.paymentMethods.includes("Credit Card")}
+                onChange={handlePaymentMethodsChange}
               />
-              <span>Furnished</span>
+              <span>Credit Card</span>
+              <input
+                type="checkbox"
+                value="PayPal"
+                // checked={formData.paymentMethods.includes("PayPal")}
+                onChange={handlePaymentMethodsChange}
+              />
+              <span>PayPal</span>
+              <input
+                type="checkbox"
+                value="Bank Transfer"
+                // checked={formData.paymentMethods.includes("Bank Transfer")}
+                onChange={handlePaymentMethodsChange}
+              />
+              <span>Bank Transfer</span>
             </div>
-            <div className="flex gap-2">
+          </div> */}
+          <div className="flex gap-6 flex-wrap text-white">
+          
+            <div className="flex gap-2  text-black">
               <input
                 type="checkbox"
                 id="offer"
@@ -274,9 +294,8 @@ console.log("threee")
               />
               <span>Offer</span>
             </div>
-          </div>
-          <div className="text-white flex flex-wrap gap-6">
-            <div className="flex items-center gap-2">
+            <div className="text-white flex flex-wrap gap-6 text-black">
+            <div className="flex items-center gap-2 text-black">
               <input
                 type="number"
                 id="regularPrice"
@@ -284,7 +303,7 @@ console.log("threee")
                 min="0"
                 onChange={handleFormChange}
                 checked={formData.regularPrice}
-                className="p-3 border border-gray-300 rounded-lg text-black"
+                className="p-3 border border-gray-300 border-black border-solid bg-white rounded-lg text-black"
               />
               <div className="flex flex-col items-center">
                 <p>Regular price </p>
@@ -292,16 +311,16 @@ console.log("threee")
               </div>
             </div>
             {
-              formData.offer &&( <div className="flex items-center gap-2">
+              formData.offer &&( <div className="flex items-center  bg-white gap-2 text-black">
               <input
                 type="number"
                 id="discountPrice"
-                required
+                // required
                 min="0"
                 max='1000000'
                 onChange={handleFormChange}
                 checked={formData.discountPrice}
-                className="p-3 border border-gray-300 rounded-lg text-black"
+                className="p-3 border border-gray-300 bg-white rounded-lg text-black"
               />
               <div className="flex flex-col items-center">
                 <p>Discount price</p>
@@ -313,63 +332,64 @@ console.log("threee")
             }
            
           </div>
-        </div>
-        <div className=" flex flex-col flex-1 text-white gap-4">
-          <p className="font-semibold">
-            Images:
-            <span className="font-normal text-richblack-100 ml-2">
-              The first will be the cover (max 6)
-            </span>
-          </p>
-          <div className=" flex gap-4">
-            <input
-              onChange={(e) => {
-                setFiles(e.target.files);
-              }}
-              className="p-3 border border-gray-300 rounded w-full"
-              type="file"
-              id="images"
-              accept="image/*"
-              multiple
-            />
-            <button
-              type="button"
-              disabled={uploadingProgress}
-              onClick={handleImageUpload}
-              className="p-3 text-green-700 border border-green-700 rounded uppercase hover:shadow-lg 
-                        disabled:opacity-80"
-            >
-              {uploadingProgress ? "Uploading..." : "Upload"}
-            </button>
           </div>
-          {/* <p className="text-red-700 text-sm">{imageUploadError && imageUploadError}</p> */}
-          {formData.imageUrls.length > 0 &&
-            formData.imageUrls.map((url, index) => (
-              <div
-                key={url}
-                className="flex justify-between p-3 border items-center"
-              >
+        </div>
+
+        {/* Right Side (Image Upload) */}
+        <div className="flex flex-col gap-6 flex-1 bg-gray-50 border-black border-solid p-6 rounded-lg">
+          <div>
+            <label htmlFor="image" className="font-semibold text-gray-700">
+              Upload Images
+            </label>
+            <input
+              type="file"
+              multiple
+              id="image"
+              onChange={(e) => setFiles(e.target.files)}
+              className="border p-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600"
+            />
+            {imageUploadError && (
+              <p className="text-red-600 text-sm mt-2">{imageUploadError}</p>
+            )}
+          </div>
+
+          {/* Image Preview */}
+          <div className="flex gap-3 mt-4 flex-wrap">
+            {formData.imageUrls.map((url, index) => (
+              <div key={index} className="relative w-24 h-24">
                 <img
                   src={url}
-                  alt="listing image"
-                  className="w-40 h-40 object-cover rounded-lg"
+                  alt="Listing"
+                  className="w-full h-full object-cover rounded-lg"
                 />
                 <button
                   type="button"
                   onClick={() => handleRemoveImage(index)}
-                  className="p-3 text-red-700 rounded-lg uppercase
-                hover:opacity-95 disabled:opacity-75"
+                  className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
                 >
-                  Delete
+                  &times;
                 </button>
               </div>
             ))}
-          <button disabled={loading|| uploadingProgress}
-            className=" p-3 bg-richblack-700 text-white rounded-lg 
-                uppercase"
-          >
-            Create Listing
-          </button>
+          </div>
+
+          {/* Buttons */}
+          <div className="flex justify-between gap-3 mt-6">
+            <button
+              type="button"
+              onClick={handleImageUpload}
+              className="w-full p-4 bg-blue-600 text-white rounded-lg"
+            >
+              Upload Images
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full p-4 bg-green-600 text-white rounded-lg"
+            >
+              {loading ? "Creating Listing..." : "Create Listing"}
+            </button>
+          </div>
         </div>
       </form>
     </main>

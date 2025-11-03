@@ -58,7 +58,7 @@ export const VerifyEmail = () => {
                 </button>
             </form>
             <div className='mt-6 flex items-center justify-between'>
-                    <Link to='/signup'>
+                    <Link to='/sign-up'>
                         <p className='flex items-center gap-x-2 text-richblack-5'>
                         <BiArrowBack/>
                         Back to Signup</p>
